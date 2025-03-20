@@ -1,0 +1,18 @@
+{
+  "today": [
+    {
+      "id": "20250320224448",
+      "title": "Python Programming",
+      "content": "Discussion about Python basics",
+      "timestamp": "2025-03-20T22:44:48.217519"
+    },
+    {
+      "id": "20250320224448",
+      "title": "Data Structures",
+      "content": "Talked about lists and dictionaries",
+      "timestamp": "2025-03-20T22:44:48.217519"
+    }
+  ],
+  "yesterday": [],
+  "previous_7_days": []
+}
