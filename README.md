@@ -69,8 +69,8 @@ python app.py
 Open your web browser and go to `http://127.0.0.1:5000/` to interact with the chatbot.
 
 ## This is the Chatbot interface you will see
-![Chatbot Audio Feature](images/audio.png)
-![Chatbot Audio Feature](images/convo.png)
+![Chatbot Feature](images/main.jpg)
+![Chatbot Audio Feature](images/chatbot.jpg)
 
 ## Usage
 1. Enter your query in the chat box.
