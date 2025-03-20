@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}Welcome to DOJ Chatbot{% endblock %}
+
+{% block content %}
+<!-- Welcome Modal for First-time Users -->
+<div class="modal fade" id="welcomeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">Welcome to DOJ Chatbot! 👋</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-4">
+                    <i class="fas fa-robot fa-3x text-primary mb-3"></i>
+                    <h4>Get Started in 2 Easy Steps</h4>
+                </div>
+                <div class="steps">
+                    <div class="step d-flex align-items-center mb-3">
+                        <div class="step-number">1</div>
+                        <div class="step-text">Create an account or login if you already have one</div>
+                    </div>
+                    <div class="step d-flex align-items-center">
+                        <div class="step-number">2</div>
+                        <div class="step-text">Start chatting with our AI assistant!</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary w-100" data-bs-dismiss="modal">Let's Begin!</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-body p-0">
+                    <div class="row">
+                        <!-- Left side - Welcome Message -->
+                        <div class="col-md-5 bg-primary text-white p-5 d-flex flex-column justify-content-center">
+                            <h2 class="font-weight-bold mb-4">Welcome to DOJ Chatbot</h2>
+                            <p class="mb-4">Access your personalized chat experience securely.</p>
+                            <div class="mt-auto">
+                                <p class="small mb-0">First time here? 
+                                    <a href="{{ url_for('register') }}" class="text-white fw-bold">Create an account</a>
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Right side - Login Form -->
+                        <div class="col-md-7 p-5">
+                            {% with messages = get_flashed_messages() %}
+                                {% if messages %}
+                                    {% for message in messages %}
+                                        <div class="alert alert-info">{{ message }}</div>
+                                    {% endfor %}
+                                {% endif %}
+                            {% endwith %}
+
+                            <h4 class="mb-4">Login to Your Account</h4>
+
+                            <!-- Login Form -->
+                            <form method="POST" id="loginForm">
+                                <div class="form-group mb-3">
+                                    <label class="form-label">Username or Email</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="fas fa-user"></i></span>
+                                        <input type="text" class="form-control" name="username" placeholder="Enter username or email" required>
+                                    </div>
+                                </div>
+                                <div class="form-group mb-4">
+                                    <label class="form-label">Password</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                                        <input type="password" class="form-control" name="password" placeholder="Enter password" required>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">Login</button>
+                            </form>
+
+                            <div class="text-center mt-4">
+                                <p class="mb-0">Need help? <a href="#" class="text-primary" onclick="showWelcomeModal()">View Getting Started Guide</a></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Font Awesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+
+<!-- Add Custom Styles -->
+<style>
+.bg-primary {
+    background: linear-gradient(135deg, #2196F3, #1976D2);
+}
+.card {
+    border: none;
+    border-radius: 15px;
+    overflow: hidden;
+}
+.input-group-text {
+    background-color: transparent;
+    border-right: none;
+}
+.form-control {
+    border-left: none;
+}
+.form-control:focus {
+    box-shadow: none;
+    border-color: #ced4da;
+}
+.step-number {
+    width: 30px;
+    height: 30px;
+    background: #2196F3;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 15px;
+    font-weight: bold;
+}
+.step-text {
+    flex: 1;
+}
+.modal-content {
+    border-radius: 15px;
+}
+.modal-header {
+    background: linear-gradient(135deg, #2196F3, #1976D2);
+    border-bottom: none;
+}
+.btn-close-white:focus {
+    box-shadow: none;
+}
+</style>
+
+<!-- Welcome Modal Script -->
+<script>
+// Show welcome modal on first visit
+document.addEventListener('DOMContentLoaded', function() {
+    if (!localStorage.getItem('welcomeShown')) {
+        showWelcomeModal();
+        localStorage.setItem('welcomeShown', 'true');
+    }
+});
+
+function showWelcomeModal() {
+    const welcomeModal = new bootstrap.Modal(document.getElementById('welcomeModal'));
+    welcomeModal.show();
+}
+</script>
+{% endblock %} 
