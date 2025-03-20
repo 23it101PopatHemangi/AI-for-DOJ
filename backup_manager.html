@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backup Manager</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        .backup-container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .backup-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: white;
+            border-radius: 8px;
+        }
+
+        .backup-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .backup-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin: 5px 0;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+
+        .backup-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .btn-success {
+            background-color: #28a745;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="backup-container">
+        <h1>Backup Manager</h1>
+        
+        <div class="backup-section">
+            <h2>Create New Backup</h2>
+            <button class="btn btn-primary" onclick="createBackup()">Create Full Backup</button>
+            <div id="backup-status"></div>
+        </div>
+
+        <div class="backup-section">
+            <h2>Database Backups</h2>
+            <ul class="backup-list" id="database-backups">
+                <!-- Will be populated by JavaScript -->
+            </ul>
+        </div>
+
+        <div class="backup-section">
+            <h2>Chat History Backups</h2>
+            <ul class="backup-list" id="chat-backups">
+                <!-- Will be populated by JavaScript -->
+            </ul>
+        </div>
+
+        <div class="backup-section">
+            <h2>User Data Backups</h2>
+            <ul class="backup-list" id="user-backups">
+                <!-- Will be populated by JavaScript -->
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function createBackup() {
+            const statusDiv = document.getElementById('backup-status');
+            statusDiv.innerHTML = 'Creating backup...';
+            
+            $.ajax({
+                url: '/backup',
+                method: 'GET',
+                success: function(response) {
+                    statusDiv.innerHTML = 'Backup created successfully!';
+                    loadBackups();
+                },
+                error: function(xhr, status, error) {
+                    statusDiv.innerHTML = `Error creating backup: ${error}`;
+                }
+            });
+        }
+
+        function restoreBackup(type, filename) {
+            if (confirm('Are you sure you want to restore this backup? This will overwrite current data.')) {
+                $.ajax({
+                    url: `/restore/${type}/${filename}`,
+                    method: 'GET',
+                    success: function(response) {
+                        alert('Backup restored successfully!');
+                        loadBackups();
+                    },
+                    error: function(xhr, status, error) {
+                        alert(`Error restoring backup: ${error}`);
+                    }
+                });
+            }
+        }
+
+        function loadBackups() {
+            $.ajax({
+                url: '/list-backups',
+                method: 'GET',
+                success: function(response) {
+                    // Update database backups
+                    const dbBackupsList = document.getElementById('database-backups');
+                    dbBackupsList.innerHTML = '';
+                    response.database.forEach(backup => {
+                        dbBackupsList.innerHTML += createBackupListItem('database', backup);
+                    });
+
+                    // Update chat history backups
+                    const chatBackupsList = document.getElementById('chat-backups');
+                    chatBackupsList.innerHTML = '';
+                    response.chat_history.forEach(backup => {
+                        chatBackupsList.innerHTML += createBackupListItem('chat_history', backup);
+                    });
+
+                    // Update user data backups
+                    const userBackupsList = document.getElementById('user-backups');
+                    userBackupsList.innerHTML = '';
+                    response.user_data.forEach(backup => {
+                        userBackupsList.innerHTML += createBackupListItem('user_data', backup);
+                    });
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error loading backups:', error);
+                    alert('Error loading backups. Please try again.');
+                }
+            });
+        }
+
+        function createBackupListItem(type, backup) {
+            const date = new Date(backup.created).toLocaleString();
+            const size = formatFileSize(backup.size);
+            return `
+                <li class="backup-item">
+                    <div class="backup-info">
+                        <strong>${backup.filename}</strong><br>
+                        <small>Created: ${date} | Size: ${size}</small>
+                    </div>
+                    <div class="backup-actions">
+                        <button class="btn btn-success" onclick="restoreBackup('${type}', '${backup.filename}')">
+                            Restore
+                        </button>
+                        <button class="btn btn-danger" onclick="deleteBackup('${type}', '${backup.filename}')">
+                            Delete
+                        </button>
+                    </div>
+                </li>
+            `;
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function deleteBackup(type, filename) {
+            if (confirm('Are you sure you want to delete this backup?')) {
+                $.ajax({
+                    url: `/delete-backup/${type}/${filename}`,
+                    method: 'DELETE',
+                    success: function(response) {
+                        loadBackups();
+                    },
+                    error: function(xhr, status, error) {
+                        alert(`Error deleting backup: ${error}`);
+                    }
+                });
+            }
+        }
+
+        // Load backups when the page loads
+        $(document).ready(function() {
+            loadBackups();
+        });
+    </script>
+</body>
+</html> 
