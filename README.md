@@ -8,7 +8,6 @@ The DoJ Website Chatbot is an AI-based interactive virtual assistant designed to
 - **Natural Language Processing (NLP)**: Utilizes spaCy for sentence tokenization and lemmatization.
 - **Spell Correction**: Integrated spell checker to correct user input for better query matching.
 - **Fuzzy Matching**: Uses FuzzyWuzzy for partial string matching to find relevant information.
-- **TF-IDF & Cosine Similarity**: Implements TF-IDF vectorization and cosine similarity to identify the most relevant sentences from the provided text data.
 - **Voice Input**: Supports voice input recognition, allowing users to interact with the chatbot using spoken queries.
 - **In-Memory Chat History**: Stores chat history in memory for the duration of the session.
 - **Interactive User Interface**: A simple Flask-based web interface for users to interact with the chatbot.
@@ -16,18 +15,30 @@ The DoJ Website Chatbot is an AI-based interactive virtual assistant designed to
 
 ## Project Structure
 ```
-DoJ_Website_Chatbot/
+SGP_PROJECT-main/
 │
-├── app.py                  
-├── templates/
-│   └── chat.html           
+├── app.py
+├── chat_history.json
+├── Jenkinsfile
+├── README.md
+├── .gitignore
+├── .env
+│
 ├── static/
-│   └── style.css          
-├── documents/
-│   └── scraped_data1.csv 
-├── requirements.txt        
-├── README.md             
-└── .gitignore             
+    ├──style.css
+├── templates/
+│   ├── backup_manager.html
+│   ├── base.html
+│   ├── chat.html
+│   ├── chatbot.html
+│   ├── dashboard.html
+│   ├── files.html
+│   ├── index.html
+│   ├── login.html
+│   ├── profile.html
+│   ├── register.html
+│
+└── utils/
 ```
 
 ## Installation
@@ -66,7 +77,7 @@ To run the Flask application locally, execute the following command:
 python app.py
 ```
 
-Open your web browser and go to `http://127.0.0.1:5000/` to interact with the chatbot.
+Open your web browser and go to `localhost:5000` to interact with the chatbot.
 
 ## This is the Chatbot interface you will see
 ![Chatbot Feature](images/main.jpg)
