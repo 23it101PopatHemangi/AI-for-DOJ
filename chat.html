@@ -1,0 +1,442 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- Chat Interface -->
+        <div class="col-md-9">
+            <div class="chat-container" style="height: calc(100vh - 150px); display: flex; flex-direction: column;">
+                <!-- Chat Messages -->
+                <div id="chat-messages" class="flex-grow-1 overflow-auto p-3">
+                    {% for message in chat_history %}
+                    <div class="message mb-3 {% if message.is_user %}user-message text-end{% else %}bot-message{% endif %}">
+                        <div class="message-content d-inline-block p-3 rounded {% if message.is_user %}bg-primary text-white{% else %}bg-light{% endif %}" style="max-width: 70%;">
+                            {{ message.message if message.is_user else message.response }}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Chat Input -->
+                <div class="chat-input p-3 border-top">
+                    <form id="chat-form" class="d-flex gap-2">
+                        <button type="button" id="mic-button" class="btn btn-outline-secondary" title="Voice Input">
+                            <i class="fas fa-microphone"></i>
+                        </button>
+                        <button type="button" id="stop-speech" class="btn btn-outline-danger" title="Stop Speech" style="display: none;">
+                            <i class="fas fa-stop"></i> Stop
+                        </button>
+                        <input type="text" id="message-input" class="form-control" placeholder="Type your message...">
+                        <button type="submit" class="btn btn-primary">Send</button>
+                    </form>
+                    <div id="voice-feedback" class="text-muted small mt-2" style="display: none;">
+                        <i class="fas fa-circle text-danger"></i> Listening...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat History Sidebar (Right Side) -->
+        <div class="col-md-3 bg-dark text-light sidebar" style="min-height: 100vh; padding: 20px; border-left: 1px solid #444;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="mb-0">Chat History</h5>
+                <button id="new-chat" class="btn btn-primary btn-sm">
+                    <i class="fas fa-plus"></i> New Chat
+                </button>
+            </div>
+            
+            <!-- Today's Chats -->
+            <div class="chat-history-section mb-4">
+                <h6 class="text-muted mb-3">Today</h6>
+                <div class="chat-history-items">
+                    {% for chat in chat_history %}
+                        {% if chat.timestamp.date() == today %}
+                        <div class="chat-history-item mb-2 p-2 rounded" onclick="loadChat({{ chat.id }})">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-comment me-2"></i>
+                                <div class="text-truncate">{{ chat.message[:30] }}...</div>
+                            </div>
+                            <small class="text-muted">{{ chat.timestamp.strftime('%I:%M %p') }}</small>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Yesterday's Chats -->
+            <div class="chat-history-section mb-4">
+                <h6 class="text-muted mb-3">Yesterday</h6>
+                <div class="chat-history-items">
+                    {% for chat in chat_history %}
+                        {% if chat.timestamp.date() == yesterday %}
+                        <div class="chat-history-item mb-2 p-2 rounded" onclick="loadChat({{ chat.id }})">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-comment me-2"></i>
+                                <div class="text-truncate">{{ chat.message[:30] }}...</div>
+                            </div>
+                            <small class="text-muted">{{ chat.timestamp.strftime('%I:%M %p') }}</small>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Previous 7 Days -->
+            <div class="chat-history-section mb-4">
+                <h6 class="text-muted mb-3">Previous 7 Days</h6>
+                <div class="chat-history-items">
+                    {% for chat in chat_history %}
+                        {% if chat.timestamp.date() > week_ago and chat.timestamp.date() < yesterday %}
+                        <div class="chat-history-item mb-2 p-2 rounded" onclick="loadChat({{ chat.id }})">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-comment me-2"></i>
+                                <div class="text-truncate">{{ chat.message[:30] }}...</div>
+                            </div>
+                            <small class="text-muted">{{ chat.timestamp.strftime('%b %d, %I:%M %p') }}</small>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Clear Chat Button -->
+            <button id="clear-chat" class="btn btn-danger btn-sm w-100">
+                <i class="fas fa-trash me-1"></i> Clear Chat History
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Add Font Awesome for icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+
+<style>
+.chat-history-section {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.chat-history-item {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.chat-history-item:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateX(5px);
+}
+
+.message-content {
+    word-break: break-word;
+}
+
+.user-message .message-content {
+    background-color: #007bff;
+}
+
+.bot-message .message-content {
+    background-color: #f8f9fa;
+}
+
+#mic-button {
+    transition: all 0.3s ease;
+}
+
+#mic-button.recording {
+    background-color: #dc3545;
+    color: white;
+    border-color: #dc3545;
+}
+
+.fa-circle {
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.3; }
+    100% { opacity: 1; }
+}
+
+#clear-chat {
+    position: sticky;
+    bottom: 20px;
+    transition: all 0.3s ease;
+}
+
+#clear-chat:hover {
+    background-color: #c82333;
+}
+
+.sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.chat-history-items {
+    max-height: calc(100vh - 400px);
+    overflow-y: auto;
+}
+
+#stop-speech {
+    min-width: 80px;
+    display: none;
+    background-color: #dc3545;
+    color: white;
+    border-color: #dc3545;
+    transition: all 0.3s ease;
+}
+
+#stop-speech:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
+
+#stop-speech:focus {
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.5);
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const chatForm = document.getElementById('chat-form');
+    const messageInput = document.getElementById('message-input');
+    const chatMessages = document.getElementById('chat-messages');
+    const clearChatBtn = document.getElementById('clear-chat');
+    const micButton = document.getElementById('mic-button');
+    const voiceFeedback = document.getElementById('voice-feedback');
+    const stopSpeechBtn = document.getElementById('stop-speech');
+    const newChatBtn = document.getElementById('new-chat');
+    let currentUtterance = null;
+
+    // Function to load chat history
+    async function loadChat(chatId) {
+        try {
+            const response = await fetch(`/load_chat/${chatId}`);
+            const data = await response.json();
+            
+            if (data.messages) {
+                chatMessages.innerHTML = '';
+                data.messages.forEach(msg => {
+                    appendMessage(msg.message, msg.is_user);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading chat:', error);
+        }
+    }
+
+    // Clear Chat button handler
+    clearChatBtn.addEventListener('click', async function() {
+        if (confirm('Are you sure you want to clear the chat history?')) {
+            try {
+                const response = await fetch('/clear_chat', {
+                    method: 'POST'
+                });
+                if (response.ok) {
+                    chatMessages.innerHTML = '';
+                    location.reload(); // Reload to update sidebar
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+    });
+
+    // New Chat button handler
+    newChatBtn.addEventListener('click', async function() {
+        try {
+            const response = await fetch('/clear_chat', {
+                method: 'POST'
+            });
+            if (response.ok) {
+                chatMessages.innerHTML = '';
+                location.reload(); // Reload to update sidebar
+            }
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    });
+
+    // Speech Recognition Setup
+    let recognition = null;
+    if ('webkitSpeechRecognition' in window) {
+        recognition = new webkitSpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+
+        recognition.onstart = function() {
+            micButton.classList.add('recording');
+            voiceFeedback.style.display = 'block';
+        };
+
+        recognition.onend = function() {
+            micButton.classList.remove('recording');
+            voiceFeedback.style.display = 'none';
+        };
+
+        recognition.onresult = function(event) {
+            const transcript = event.results[0][0].transcript;
+            messageInput.value = transcript;
+            chatForm.dispatchEvent(new Event('submit'));
+        };
+
+        recognition.onerror = function(event) {
+            console.error('Speech recognition error:', event.error);
+            micButton.classList.remove('recording');
+            voiceFeedback.style.display = 'none';
+            if (event.error === 'not-allowed') {
+                alert('Please enable microphone access to use voice input.');
+            }
+        };
+
+        micButton.addEventListener('click', function() {
+            if (micButton.classList.contains('recording')) {
+                recognition.stop();
+            } else {
+                recognition.start();
+            }
+        });
+    } else {
+        micButton.style.display = 'none';
+        console.log('Speech recognition not supported');
+    }
+
+    // Helper function to append messages
+    function appendMessage(message, isUser) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message mb-3 ${isUser ? 'user-message text-end' : 'bot-message'}`;
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = `message-content d-inline-block p-3 rounded ${isUser ? 'bg-primary text-white' : 'bg-light'}`;
+        contentDiv.style.maxWidth = '70%';
+        contentDiv.textContent = message;
+        
+        messageDiv.appendChild(contentDiv);
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // Handle new message submission
+    chatForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const message = messageInput.value.trim();
+        if (!message) return;
+
+        // Add user message to chat
+        appendMessage(message, true);
+        messageInput.value = '';
+
+        try {
+            const response = await fetch('/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ message: message })
+            });
+
+            const data = await response.json();
+            
+            // Add bot response to chat
+            appendMessage(data.response, false);
+            
+            // Read out the bot's response
+            if ('speechSynthesis' in window) {
+                // Cancel any ongoing speech
+                if (currentUtterance) {
+                    window.speechSynthesis.cancel();
+                }
+                
+                stopSpeechBtn.style.display = 'inline-block';
+                const utterance = new SpeechSynthesisUtterance(data.response);
+                utterance.lang = 'en-US';
+                utterance.rate = 1.0;  // Normal speed
+                utterance.pitch = 1.0;  // Normal pitch
+                utterance.volume = 1.0;  // Full volume
+                
+                utterance.onend = function() {
+                    stopSpeechBtn.style.display = 'none';
+                    currentUtterance = null;
+                };
+                
+                utterance.onerror = function(event) {
+                    console.error('Speech synthesis error:', event.error);
+                    stopSpeechBtn.style.display = 'none';
+                    currentUtterance = null;
+                };
+                
+                // Store the utterance before speaking
+                currentUtterance = utterance;
+                
+                // Ensure speech synthesis is not paused
+                window.speechSynthesis.cancel();  // Clear any existing speech
+                window.speechSynthesis.resume();  // Resume if paused
+                
+                // Start speaking with a slight delay to ensure proper initialization
+                setTimeout(() => {
+                    window.speechSynthesis.speak(utterance);
+                }, 100);
+            }
+            
+            // Scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            // Update chat history without full page reload
+            const historySection = document.querySelector('.chat-history-section:first-of-type .chat-history-items');
+            if (historySection) {
+                const newHistoryItem = document.createElement('div');
+                newHistoryItem.className = 'chat-history-item mb-2 p-2 rounded';
+                newHistoryItem.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-comment me-2"></i>
+                        <div class="text-truncate">${message.substring(0, 30)}...</div>
+                    </div>
+                    <small class="text-muted">${new Date().toLocaleTimeString()}</small>
+                `;
+                historySection.insertBefore(newHistoryItem, historySection.firstChild);
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            appendMessage('Sorry, there was an error processing your request.', false);
+        }
+    });
+
+    // Stop Speech button handler with improved reliability
+    stopSpeechBtn.addEventListener('click', function() {
+        if ('speechSynthesis' in window && currentUtterance) {
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.resume();  // Ensure system is ready for next speech
+            stopSpeechBtn.style.display = 'none';
+            currentUtterance = null;
+        }
+    });
+
+    // Handle page visibility change with improved speech handling
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden && currentUtterance) {
+            window.speechSynthesis.pause();
+        } else if (currentUtterance) {
+            window.speechSynthesis.resume();
+        }
+    });
+
+    // Periodic check to prevent speech synthesis from getting stuck
+    setInterval(() => {
+        if (currentUtterance && !window.speechSynthesis.speaking) {
+            window.speechSynthesis.resume();
+        }
+    }, 1000);
+
+    // Auto-scroll chat messages to bottom on load
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+});
+</script>
+{% endblock %}
