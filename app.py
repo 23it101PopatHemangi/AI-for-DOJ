@@ -25,10 +25,13 @@ import speech_recognition as sr
 import hashlib
 import base64
 from werkzeug.utils import secure_filename
-from flask_cors import CORS  # If you need to handle CORS
 
 # Load environment variables from .env file
 load_dotenv()
+
+# Initialize Hugging Face API token
+HUGGINGFACE_API_TOKEN = os.getenv('HUGGINGFACE_API_TOKEN')
+print(f"Hugging Face Token loaded: {'Yes' if HUGGINGFACE_API_TOKEN else 'No'}")
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -175,7 +178,7 @@ class UserFile(db.Model):
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
     user = db.relationship('User', backref=db.backref('files', lazy=True))
 
-# Add Indian Justice System Models
+# Add US Justice System Models
 class CourtCase(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     cnr_number = db.Column(db.String(16), unique=True)  # Case Number Record
@@ -297,251 +300,92 @@ class FIR(db.Model):
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
-# Add this function before the routes
 def get_bot_response(message):
-    # Convert message to lowercase for easier matching
     message = message.lower()
     
-    # Check for news-related queries
-    if re.search(r'news|latest|updates|recent', message):
-        try:
-            # Using NewsAPI to get latest Indian legal news
-            news_api_key = "YOUR_NEWS_API_KEY"  # Replace with your API key
-            url = f"https://newsapi.org/v2/everything?q=india+supreme+court+law&apiKey={news_api_key}&pageSize=3"
-            response = requests.get(url)
-            if response.status_code == 200:
-                news = response.json()
-                if news['articles']:
-                    news_response = "Here are the latest United States legal news:\n\n"
-                    for article in news['articles']:
-                        news_response += f"- {article['title']}\n"
-                    return news_response
-        except Exception as e:
-            logger.error(f"Error fetching news: {str(e)}")
+    # Check if Hugging Face API token is available
+    if not HUGGINGFACE_API_TOKEN:
+        logger.error("Hugging Face API token not found. Please set HUGGINGFACE_API_TOKEN in your environment variables.")
+        return "I apologize, but I'm not able to process requests right now. Please contact support."
 
-    # India-specific legal patterns
-    india_patterns = {
-        r'ministry of law|law ministry|lawmin': '''Ministry of Law & Justice:
-Key Departments:
-1. Department of Legal Affairs
-2. Legislative Department
-3. Department of Justice
+    try:
+        # Enhanced pattern matching for legal queries
+        if any(keyword in message for keyword in ['case', 'court', 'hearing', 'judge', 'lawyer', 'advocate', 'legal', 'law', 'rights', 'constitution', 'justice', 'petition', 'appeal', 'evidence', 'witness', 'prosecution', 'defendant']):
+            # Legal domain specific responses
+            if 'constitution' in message:
+                return "The Constitution of India is the supreme law of India. It provides the framework for the country's political system and establishes fundamental rights."
+            elif 'supreme court' in message:
+                return "The Supreme Court of India is the highest judicial forum and final court of appeal under the Constitution of India."
+            elif 'high court' in message:
+                return "High Courts are the principal civil courts of original jurisdiction in each state and union territory."
+            elif 'district court' in message:
+                return "District Courts in India are the primary civil courts at the district level. They handle both civil and criminal cases within their jurisdiction."
+            elif 'fir' in message:
+                return "A First Information Report (FIR) is a written document prepared by the police when they receive information about the commission of a cognizable offense."
+            elif 'legal aid' in message:
+                return "Legal aid ensures equal access to justice by providing free legal services to eligible individuals who cannot afford legal representation."
+            elif 'rights' in message:
+                return "Fundamental Rights in India include Right to Equality, Right to Freedom, Right against Exploitation, Right to Freedom of Religion, Cultural and Educational Rights, and Right to Constitutional Remedies."
+            elif 'evidence' in message:
+                return "Evidence in Indian law is governed by the Indian Evidence Act, 1872. It includes oral evidence (witnesses) and documentary evidence (documents and electronic records)."
+            elif 'witness' in message:
+                return "A witness is someone who testifies in court, providing evidence based on their direct or expert knowledge relevant to a judicial proceeding."
+            elif 'appeal' in message:
+                return "An appeal is a legal process where a case is brought to a higher court for review of the lower court's decision. The hierarchy goes from District Court to High Court to Supreme Court."
+            elif 'case' in message:
+                try:
+                    cases = CourtCase.query.limit(1).all()
+                    if cases:
+                        case = cases[0]
+                        return f"Here's information about a recent case: Case Number: {case.cnr_number}, Type: {case.case_type}, Status: {case.case_status}"
+                    else:
+                        return "A case is a legal dispute between parties that is brought before a court of law for resolution. Cases can be civil (private disputes) or criminal (prosecuted by the state)."
+                except Exception as e:
+                    logger.error(f"Database query error: {str(e)}")
+                    return "A case is a legal dispute between parties that is brought before a court of law for resolution. Cases can be civil (private disputes) or criminal (prosecuted by the state)."
+            elif 'petition' in message:
+                return "A petition is a formal written application to a court requesting legal action. Common types include writ petitions, public interest litigation (PIL), and special leave petitions (SLP)."
+            elif 'prosecution' in message:
+                return "Prosecution refers to the legal proceedings against a person accused of a crime. In India, the state conducts prosecution in criminal cases through public prosecutors."
+            elif 'defendant' in message or 'accused' in message:
+                return "A defendant/accused is the party against whom a legal action is brought. In criminal cases, they are called the accused, while in civil cases, they are called the defendant."
 
-Current Minister: Shri Arjun Ram Meghwal
-Website: https://www.justice.gov/
-Contact: Ministry of Law & Justice, Shastri Bhawan, New Delhi''',
-
-
-r'the main responsibilities of law|law responsibilities|responsibilities': '''What are the main responsibilities of the DOJ?:
-Key Departments:
-1. Enforcing federal laws
-2.Investigating and prosecuting crimes
-3.Representing the government in court
-4.Protecting civil rights
-5.Managing federal prisons
-Website: https://www.justice.gov/
-Contact: Ministry of Law & Justice, New Delhi''',
-
-
-r'department of justice|justice department': ''' What is the Department of Justice:
-1. Appointment of Supreme Court/High Court judges
-2. Court infrastructure
-3. Legal reforms
-4. Access to justice
-5. Judicial administration
-6. E-Courts project
-
-Visit: https://doj.gov.in/''',
-
-r'legislative department|law making': '''Legislative Department:
-1. Drafting of Central legislation
-2. Election laws
-3. Constitutional matters
-4. Official languages
-5. State legislations
-6. Law Commission reports
-
-Resources: https://legislative.gov.in/''',
-
-r'district court|lower court': '''District Courts in India:
-- Established under State jurisdiction
-- Civil and Criminal jurisdiction
-- Principal District Judge heads
-- Types: District, Sessions, Family Courts
-- Small Causes Courts
-- Metropolitan Magistrate Courts
-- E-Courts services available ''',
-
-r'consumer complaint|consumer rights': '''Consumer Rights in India:
-1. E-Daakhil Portal:
-- edaakhil.nic.in
-- File consumer complaints
-- Track complaint status
-- Online mediation
-
-2. Consumer Helpline:
-- Toll-free: 1915
-- WhatsApp: 8800001915
-- Email: nch.doca@nic.in''',
-
-r'legal aid|free legal help': '''Legal Aid in India:
-1. NALSA (National Legal Services Authority)
-- Toll-free: 1516
-- Website: nalsa.gov.in
-
-2. Eligibility:
-- Women and children
-- SC/ST members
-- Industrial workmen
-- Victims of disasters
-- Persons with disabilities
-- Persons in custody
-- Low income groups
-
-3. Services:
-- Free legal representation
-- Legal advice
-- Lok Adalats
-- Legal awareness camps''',
-
- r'cyber crime|online crime': '''Cyber Crime Reporting:
-1. National Cyber Crime Portal:
-- cybercrime.gov.in
-- Toll-free: 1930
-- Report online financial fraud
-- Report social media crimes
-
-2. Types of Complaints:
-- Online fraud
-- Cyberstalking
-- Data theft
-- Online harassment
-- Social media crimes''',
-
-r'labour law|employment law': '''Labour Laws in India:
-1. Key Acts:
-- Industrial Relations Code
-- Code on Wages
-- Social Security Code
-- Occupational Safety Code
-
-2. Rights:
-- Minimum wages
-- Social security
-- Safe working conditions
-- Trade union formation
-
-Portal: https://labour.gov.in/''',
-
-r'family law|marriage law': '''Family Laws in India:
-1. Hindu Laws:
-- Hindu Marriage Act
-- Hindu Succession Act
-- Hindu Adoption Act
-
-2. Muslim Laws:
-- Muslim Personal Law
-- Wakf Act
-
-3. Other Laws:
-- Special Marriage Act
-- Indian Succession Act
-- Guardianship Act''',
-
-r'property law|land law': '''Property Laws in India:
-1. Key Acts:
-- Transfer of Property Act
-- Registration Act
-- RERA Act
-- Land Acquisition Act
-
-2. Property Registration:
-- Sub-registrar offices
-- E-registration available
-- Property cards
-- Land records digitization
-
-Visit: https://legislative.gov.in/property-laws''',
-
-        r'file case|court filing': '''Filing Cases in India:
-1. Civil Cases:
-- File through District Courts
-- Pay court fees online
-- Submit documents digitally
-
-2. Criminal Cases:
-- File FIR at Police Station
-- Track on CCTNS
-- Court proceedings via e-Courts
-
-3. E-Filing Portal:
-- https://efiling.ecourts.gov.in/
-- Digital signatures required
-- Online fee payment
-- Document upload facility''',
-
-        r'fir|police complaint': '''Filing FIR in India:
-1. Visit nearest Police Station
-2. Online FIR filing: https://digitalpolice.gov.in/
-3. Zero FIR facility available
-4. Track FIR status online
-5. Get free copy of FIR
-6. Time-bound investigation
-
-Emergency: Dial 112''',
-
-
-        r'help|assistance': '''I can help you with:
-1. Indian Legal System
-2. Constitutional Rights
-3. Filing Cases/Complaints
-4. Court Information
-5. Legal Aid
-6. Consumer Rights
-7. Property Laws
-8. Family Laws
-9. Labour Laws
-10. Cyber Laws
-
-What specific information do you need?''',
-
-        r'thank you|thanks': 'You\'re welcome! For more information, visit the Ministry of Law & Justice website: https://lawmin.gov.in/',
-
-        r'bye|goodbye|byy': 'Thank you for using the Indian Legal Assistant. Visit https://lawmin.gov.in/ for more information. Have a great day!'
-    }
-
-    # Check for time-related questions
-    if re.search(r'time|current time', message):
-        return f"The current time is {datetime.now().strftime('%I:%M %p')} IST"
-    
-    # Check for date-related questions
-    if re.search(r'date|today', message):
-        return f"Today's date is {datetime.now().strftime('%B %d, %Y')}"
-    
-    # Check India-specific patterns first
-    for pattern, response in india_patterns.items():
-        if re.search(pattern, message):
-            return response
-    
-    # Default response
-    return '''I can help you with information about the United States legal system, including:
-1. Ministry of Law & Justice
-2. What are the main responsibilities of the DOJ?
-3. What is the Department of Justice (DOJ)?
-4.Legislative Department
-5.District Courts in India
-6.Consumer Rights in India
-7.Legal Aid in India
-8.Cyber Crime Reporting
-9.Labour Laws in India
-10.Family Laws in India
-
-
-Please specify what information you need about these topics.
-
-For official information, visit: https://www.justice.gov/'''
+        # For other queries, use a more reliable model
+        API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-base"
+        headers = {
+            "Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        
+        # Enhanced prompt for better legal responses
+        legal_context = "Answer this legal question about Indian law and justice system: "
+        payload = {
+            "inputs": legal_context + message,
+            "parameters": {
+                "max_length": 200,
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "do_sample": True
+            }
+        }
+        
+        response = requests.post(API_URL, headers=headers, json=payload)
+        logger.info(f"Response status: {response.status_code}")
+        logger.info(f"Response content: {response.text}")
+        
+        if response.status_code == 200:
+            result = response.json()
+            if isinstance(result, list) and len(result) > 0:
+                return result[0].get('generated_text', '').strip()
+            return str(result).strip()
+        else:
+            return "I can help you with information about Indian law, courts, legal procedures, and rights. Please ask a specific question about any legal topic."
+            
+    except Exception as e:
+        logger.error(f"Error: {str(e)}")
+        return "I can help you with information about Indian law, courts, legal procedures, and rights. Please ask a specific question about any legal topic."
 
 def process_voice_audio(audio_file, user_id):
     """Helper function to process voice audio files"""
@@ -1279,105 +1123,6 @@ def upload_document(case_id):
         logger.error(f'Error uploading document: {str(e)}')
         flash('Error uploading document. Please try again.')
         return redirect(url_for('case_documents', case_id=case_id))
-
-@app.route('/get_answer', methods=['POST'])
-def get_answer():
-    data = request.get_json()
-    question = data.get('question', '')
-    
-    qa_database = {
-       ["1. Ministry of Law & Justice", 
-                "The Ministry of Law & Justice is responsible for the administration of justice, legal affairs, and legislative activities in the United States."],
-            
-            ["2. What are the main responsibilities of the DOJ?",
-                "The main responsibilities of the DOJ include:\n" +
-                "1. Enforcing federal laws\n" +
-                "2. Investigating and prosecuting crimes\n" +
-                "3. Representing the government in court\n" +
-                "4. Protecting civil rights\n" +
-                "5. Managing federal prisons"],
-
-            ["3. What is the Department of Justice (DOJ)?",
-                "What is the Department of Justice: Key Functions include:\n" +
-                "1. Appointment of Supreme Court/High Court judges\n" +
-                "2. Court infrastructure\n" +
-                "3. Legal reforms\n" +
-                "4. Access to justice\n" +
-                "5. Judicial administration\n" +
-                "6. E-Courts project\n" +
-                "Visit: https://doj.gov.in/"],
-
-            ["4.Legislative Department",
-                    "The Legislative Department is responsible for the following functions:\n" +
-                    "1. Drafting and reviewing legislation\n" +
-                    "2. Providing legal advice to government departments\n" +
-                    "3. Representing the government in court\n" +
-                    "4. Managing government litigation"],
-            ["5.District Courts in India",
-                        "The District Courts in India are the following:\n" +
-                        "1. District Courts of various states\n" +
-                        "2. Sessions Courts of various states\n" +
-                        "3. Family Courts of various states\n" +
-                        "4. Small Causes Courts of various states\n" +
-                        "5. Metropolitan Magistrate Courts of various states"],
-            ["6.Consumer Rights in India",
-                "The Consumer Rights in India are the following:\n" +
-                "1. E-Daakhil Portal\n" +
-                "2. Consumer Helpline\n" +
-                "3. Consumer Protection Act\n" +
-                "4. Consumer Protection Act\n" +
-                "5. Consumer Protection Act"],
-            ["7.Legal Aid in India",
-                "The Legal Aid in India is the following:\n" +
-                "1. NALSA (National Legal Services Authority)\n" +
-                "2. Toll-free: 1516\n" +
-                "3. Website: nalsa.gov.in"],
-            ["8.Cyber Crime Reporting",
-                    "The Cyber Crime Reporting is the following:\n" +
-                    "1. Cyber Crime Reporting\n" +
-                    "2. Cyber Crime Reporting\n" +
-                    "3. Cyber Crime Reporting\n" +
-                    "4. Cyber Crime Reporting\n" +
-                    "5. Cyber Crime Reporting"],
-            ["9.Labour Laws in India",
-                "The Labour Laws in India are the following:\n" +
-                "1. Labour Laws in India\n" +
-                "2. Labour Laws in India\n" +
-                "3. Labour Laws in India\n" +
-                "4. Labour Laws in India\n" +
-                "5. Labour Laws in India"],
-            ["10.Family Laws in India",
-                "The Family Laws in India are the following:\n" +
-                "1. Family Laws in India\n" +
-                "2. Family Laws in India\n" +
-                "3. Family Laws in India\n" +
-                "4. Family Laws in India\n" +
-                "5. Family Laws in India"]     
-    }
-    
-    # Try exact match
-    answer = qa_database.get(question)
-    
-    # If no exact match, try without spaces
-    if not answer:
-        question_no_space = question.replace(' ', '')
-        for key, value in qa_database.items():
-            if key.replace(' ', '') == question_no_space:
-                answer = value
-                break
-    
-    # If still no match, try by number
-    if not answer:
-        question_number = question.split('.')[0]
-        for key, value in qa_database.items():
-            if key.startswith(question_number + '.'):
-                answer = value
-                break
-    
-    if not answer:
-        answer = "Please specify what information you need about these topics. For official information, visit: https://www.justice.gov/"
-    
-    return jsonify({'answer': answer})
 
 if __name__ == '__main__':
     # Create database tables
