@@ -25,6 +25,7 @@ import speech_recognition as sr
 import hashlib
 import base64
 from werkzeug.utils import secure_filename
+from flask_cors import CORS  # If you need to handle CORS
 
 # Load environment variables from .env file
 load_dotenv()
@@ -313,7 +314,7 @@ def get_bot_response(message):
             if response.status_code == 200:
                 news = response.json()
                 if news['articles']:
-                    news_response = "Here are the latest Indian legal news:\n\n"
+                    news_response = "Here are the latest United States legal news:\n\n"
                     for article in news['articles']:
                         news_response += f"- {article['title']}\n"
                     return news_response
@@ -322,7 +323,7 @@ def get_bot_response(message):
 
     # India-specific legal patterns
     india_patterns = {
-        r'ministry of law|law ministry|lawmin': '''Ministry of Law & Justice, Government of India:
+        r'ministry of law|law ministry|lawmin': '''Ministry of Law & Justice:
 Key Departments:
 1. Department of Legal Affairs
 2. Legislative Department
@@ -332,27 +333,19 @@ Current Minister: Shri Arjun Ram Meghwal
 Website: https://www.justice.gov/
 Contact: Ministry of Law & Justice, Shastri Bhawan, New Delhi''',
 
-        r'legal affairs department|legal department': '''Department of Legal Affairs Functions:
-1. Legal advice to Ministries/Departments
-2. Attorney General's office
-3. Treaties and agreements
-4. Legal profession regulation
-5. Notaries appointment
-6. Legal aid to poor
 
-Visit: https://legalaffairs.gov.in/''',
+r'the main responsibilities of law|law responsibilities|responsibilities': '''What are the main responsibilities of the DOJ?:
+Key Departments:
+1. Enforcing federal laws
+2.Investigating and prosecuting crimes
+3.Representing the government in court
+4.Protecting civil rights
+5.Managing federal prisons
+Website: https://www.justice.gov/
+Contact: Ministry of Law & Justice, New Delhi''',
 
-        r'legislative department|law making': '''Legislative Department:
-1. Drafting of Central legislation
-2. Election laws
-3. Constitutional matters
-4. Official languages
-5. State legislations
-6. Law Commission reports
 
-Resources: https://legislative.gov.in/''',
-
-        r'department of justice|justice department': '''Department of Justice:
+r'department of justice|justice department': ''' What is the Department of Justice:
 1. Appointment of Supreme Court/High Court judges
 2. Court infrastructure
 3. Legal reforms
@@ -362,50 +355,38 @@ Resources: https://legislative.gov.in/''',
 
 Visit: https://doj.gov.in/''',
 
-        r'indian constitution|constitution of india': '''Constitution of India:
-- Adopted: 26 November 1949
-- Enforced: 26 January 1950
-- Parts: 25
-- Articles: 395
-- Schedules: 12
-- Fundamental Rights: Articles 12-35
-- Directive Principles: Articles 36-51
-- Fundamental Duties: Article 51A
+r'legislative department|law making': '''Legislative Department:
+1. Drafting of Central legislation
+2. Election laws
+3. Constitutional matters
+4. Official languages
+5. State legislations
+6. Law Commission reports
 
-Access at: https://legislative.gov.in/constitution-of-india''',
+Resources: https://legislative.gov.in/''',
 
-        r'supreme court india|sc india': '''Supreme Court of India:
-- Chief Justice: Hon'ble Dr. Justice D.Y. Chandrachud
-- Location: Tilak Marg, New Delhi
-- Jurisdiction: Entire territory of India
-- Constitutional Powers: Articles 124-147
-- E-filing: https://efiling.sci.gov.in/
-- Cause Lists: https://main.sci.gov.in/causelist
-- Judgments: https://main.sci.gov.in/judgments''',
-
-        r'high court india|hc india': '''High Courts in India:
-- Total High Courts: 25
-- Article 214: High Court for each state
-- Original and Appellate Jurisdiction
-- Powers under Article 226
-- Subordinate Courts supervision
-- E-filing facilities available
-- Cause lists published daily
-
-Find your High Court: https://ecourts.gov.in/ecourts_home/static/highcourts.php''',
-
-        r'district court|lower court': '''District Courts in India:
+r'district court|lower court': '''District Courts in India:
 - Established under State jurisdiction
 - Civil and Criminal jurisdiction
 - Principal District Judge heads
 - Types: District, Sessions, Family Courts
 - Small Causes Courts
 - Metropolitan Magistrate Courts
-- E-Courts services available
+- E-Courts services available ''',
 
-Access: https://districts.ecourts.gov.in/''',
+r'consumer complaint|consumer rights': '''Consumer Rights in India:
+1. E-Daakhil Portal:
+- edaakhil.nic.in
+- File consumer complaints
+- Track complaint status
+- Online mediation
 
-        r'legal aid|free legal help': '''Legal Aid in India:
+2. Consumer Helpline:
+- Toll-free: 1915
+- WhatsApp: 8800001915
+- Email: nch.doca@nic.in''',
+
+r'legal aid|free legal help': '''Legal Aid in India:
 1. NALSA (National Legal Services Authority)
 - Toll-free: 1516
 - Website: nalsa.gov.in
@@ -424,6 +405,65 @@ Access: https://districts.ecourts.gov.in/''',
 - Legal advice
 - Lok Adalats
 - Legal awareness camps''',
+
+ r'cyber crime|online crime': '''Cyber Crime Reporting:
+1. National Cyber Crime Portal:
+- cybercrime.gov.in
+- Toll-free: 1930
+- Report online financial fraud
+- Report social media crimes
+
+2. Types of Complaints:
+- Online fraud
+- Cyberstalking
+- Data theft
+- Online harassment
+- Social media crimes''',
+
+r'labour law|employment law': '''Labour Laws in India:
+1. Key Acts:
+- Industrial Relations Code
+- Code on Wages
+- Social Security Code
+- Occupational Safety Code
+
+2. Rights:
+- Minimum wages
+- Social security
+- Safe working conditions
+- Trade union formation
+
+Portal: https://labour.gov.in/''',
+
+r'family law|marriage law': '''Family Laws in India:
+1. Hindu Laws:
+- Hindu Marriage Act
+- Hindu Succession Act
+- Hindu Adoption Act
+
+2. Muslim Laws:
+- Muslim Personal Law
+- Wakf Act
+
+3. Other Laws:
+- Special Marriage Act
+- Indian Succession Act
+- Guardianship Act''',
+
+r'property law|land law': '''Property Laws in India:
+1. Key Acts:
+- Transfer of Property Act
+- Registration Act
+- RERA Act
+- Land Acquisition Act
+
+2. Property Registration:
+- Sub-registrar offices
+- E-registration available
+- Property cards
+- Land records digitization
+
+Visit: https://legislative.gov.in/property-laws''',
 
         r'file case|court filing': '''Filing Cases in India:
 1. Civil Cases:
@@ -452,76 +492,6 @@ Access: https://districts.ecourts.gov.in/''',
 
 Emergency: Dial 112''',
 
-        r'cyber crime|online crime': '''Cyber Crime Reporting:
-1. National Cyber Crime Portal:
-- cybercrime.gov.in
-- Toll-free: 1930
-- Report online financial fraud
-- Report social media crimes
-
-2. Types of Complaints:
-- Online fraud
-- Cyberstalking
-- Data theft
-- Online harassment
-- Social media crimes''',
-
-        r'consumer complaint|consumer rights': '''Consumer Rights in India:
-1. E-Daakhil Portal:
-- edaakhil.nic.in
-- File consumer complaints
-- Track complaint status
-- Online mediation
-
-2. Consumer Helpline:
-- Toll-free: 1915
-- WhatsApp: 8800001915
-- Email: nch.doca@nic.in''',
-
-        r'property law|land law': '''Property Laws in India:
-1. Key Acts:
-- Transfer of Property Act
-- Registration Act
-- RERA Act
-- Land Acquisition Act
-
-2. Property Registration:
-- Sub-registrar offices
-- E-registration available
-- Property cards
-- Land records digitization
-
-Visit: https://legislative.gov.in/property-laws''',
-
-        r'family law|marriage law': '''Family Laws in India:
-1. Hindu Laws:
-- Hindu Marriage Act
-- Hindu Succession Act
-- Hindu Adoption Act
-
-2. Muslim Laws:
-- Muslim Personal Law
-- Wakf Act
-
-3. Other Laws:
-- Special Marriage Act
-- Indian Succession Act
-- Guardianship Act''',
-
-        r'labour law|employment law': '''Labour Laws in India:
-1. Key Acts:
-- Industrial Relations Code
-- Code on Wages
-- Social Security Code
-- Occupational Safety Code
-
-2. Rights:
-- Minimum wages
-- Social security
-- Safe working conditions
-- Trade union formation
-
-Portal: https://labour.gov.in/''',
 
         r'help|assistance': '''I can help you with:
 1. Indian Legal System
@@ -539,7 +509,7 @@ What specific information do you need?''',
 
         r'thank you|thanks': 'You\'re welcome! For more information, visit the Ministry of Law & Justice website: https://lawmin.gov.in/',
 
-        r'bye|goodbye': 'Thank you for using the Indian Legal Assistant. Visit https://lawmin.gov.in/ for more information. Have a great day!'
+        r'bye|goodbye|byy': 'Thank you for using the Indian Legal Assistant. Visit https://lawmin.gov.in/ for more information. Have a great day!'
     }
 
     # Check for time-related questions
@@ -556,18 +526,22 @@ What specific information do you need?''',
             return response
     
     # Default response
-    return '''I can help you with information about the Indian legal system, including:
+    return '''I can help you with information about the United States legal system, including:
 1. Ministry of Law & Justice
-2. Indian Constitution
-3. Courts System
-4. Legal Rights
-5. Filing Cases/Complaints
-6. Legal Aid
-7. Various Laws (Property, Family, Labour, etc.)
+2. What are the main responsibilities of the DOJ?
+3. What is the Department of Justice (DOJ)?
+4.Legislative Department
+5.District Courts in India
+6.Consumer Rights in India
+7.Legal Aid in India
+8.Cyber Crime Reporting
+9.Labour Laws in India
+10.Family Laws in India
+
 
 Please specify what information you need about these topics.
 
-For official information, visit: https://lawmin.gov.in/'''
+For official information, visit: https://www.justice.gov/'''
 
 def process_voice_audio(audio_file, user_id):
     """Helper function to process voice audio files"""
@@ -1305,6 +1279,105 @@ def upload_document(case_id):
         logger.error(f'Error uploading document: {str(e)}')
         flash('Error uploading document. Please try again.')
         return redirect(url_for('case_documents', case_id=case_id))
+
+@app.route('/get_answer', methods=['POST'])
+def get_answer():
+    data = request.get_json()
+    question = data.get('question', '')
+    
+    qa_database = {
+       ["1. Ministry of Law & Justice", 
+                "The Ministry of Law & Justice is responsible for the administration of justice, legal affairs, and legislative activities in the United States."],
+            
+            ["2. What are the main responsibilities of the DOJ?",
+                "The main responsibilities of the DOJ include:\n" +
+                "1. Enforcing federal laws\n" +
+                "2. Investigating and prosecuting crimes\n" +
+                "3. Representing the government in court\n" +
+                "4. Protecting civil rights\n" +
+                "5. Managing federal prisons"],
+
+            ["3. What is the Department of Justice (DOJ)?",
+                "What is the Department of Justice: Key Functions include:\n" +
+                "1. Appointment of Supreme Court/High Court judges\n" +
+                "2. Court infrastructure\n" +
+                "3. Legal reforms\n" +
+                "4. Access to justice\n" +
+                "5. Judicial administration\n" +
+                "6. E-Courts project\n" +
+                "Visit: https://doj.gov.in/"],
+
+            ["4.Legislative Department",
+                    "The Legislative Department is responsible for the following functions:\n" +
+                    "1. Drafting and reviewing legislation\n" +
+                    "2. Providing legal advice to government departments\n" +
+                    "3. Representing the government in court\n" +
+                    "4. Managing government litigation"],
+            ["5.District Courts in India",
+                        "The District Courts in India are the following:\n" +
+                        "1. District Courts of various states\n" +
+                        "2. Sessions Courts of various states\n" +
+                        "3. Family Courts of various states\n" +
+                        "4. Small Causes Courts of various states\n" +
+                        "5. Metropolitan Magistrate Courts of various states"],
+            ["6.Consumer Rights in India",
+                "The Consumer Rights in India are the following:\n" +
+                "1. E-Daakhil Portal\n" +
+                "2. Consumer Helpline\n" +
+                "3. Consumer Protection Act\n" +
+                "4. Consumer Protection Act\n" +
+                "5. Consumer Protection Act"],
+            ["7.Legal Aid in India",
+                "The Legal Aid in India is the following:\n" +
+                "1. NALSA (National Legal Services Authority)\n" +
+                "2. Toll-free: 1516\n" +
+                "3. Website: nalsa.gov.in"],
+            ["8.Cyber Crime Reporting",
+                    "The Cyber Crime Reporting is the following:\n" +
+                    "1. Cyber Crime Reporting\n" +
+                    "2. Cyber Crime Reporting\n" +
+                    "3. Cyber Crime Reporting\n" +
+                    "4. Cyber Crime Reporting\n" +
+                    "5. Cyber Crime Reporting"],
+            ["9.Labour Laws in India",
+                "The Labour Laws in India are the following:\n" +
+                "1. Labour Laws in India\n" +
+                "2. Labour Laws in India\n" +
+                "3. Labour Laws in India\n" +
+                "4. Labour Laws in India\n" +
+                "5. Labour Laws in India"],
+            ["10.Family Laws in India",
+                "The Family Laws in India are the following:\n" +
+                "1. Family Laws in India\n" +
+                "2. Family Laws in India\n" +
+                "3. Family Laws in India\n" +
+                "4. Family Laws in India\n" +
+                "5. Family Laws in India"]     
+    }
+    
+    # Try exact match
+    answer = qa_database.get(question)
+    
+    # If no exact match, try without spaces
+    if not answer:
+        question_no_space = question.replace(' ', '')
+        for key, value in qa_database.items():
+            if key.replace(' ', '') == question_no_space:
+                answer = value
+                break
+    
+    # If still no match, try by number
+    if not answer:
+        question_number = question.split('.')[0]
+        for key, value in qa_database.items():
+            if key.startswith(question_number + '.'):
+                answer = value
+                break
+    
+    if not answer:
+        answer = "Please specify what information you need about these topics. For official information, visit: https://www.justice.gov/"
+    
+    return jsonify({'answer': answer})
 
 if __name__ == '__main__':
     # Create database tables
