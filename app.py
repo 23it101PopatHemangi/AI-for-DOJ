@@ -25,6 +25,7 @@ import speech_recognition as sr
 import hashlib
 import base64
 from werkzeug.utils import secure_filename
+from routes import init_routes
 
 # Load environment variables from .env file
 load_dotenv()
@@ -32,6 +33,10 @@ load_dotenv()
 # Initialize Hugging Face API token
 HUGGINGFACE_API_TOKEN = os.getenv('HUGGINGFACE_API_TOKEN')
 print(f"Hugging Face Token loaded: {'Yes' if HUGGINGFACE_API_TOKEN else 'No'}")
+
+# Initialize Gemini API key
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+print(f"Gemini API Key loaded: {'Yes' if GEMINI_API_KEY else 'No'}")
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -46,6 +51,9 @@ db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+# Initialize routes
+init_routes(app)
 
 # Mail configuration (optional)
 if os.getenv('MAIL_USERNAME') and os.getenv('MAIL_PASSWORD'):
@@ -93,7 +101,7 @@ def save_file(file, subfolder):
         os.makedirs(upload_dir, exist_ok=True)
         filepath = os.path.join(upload_dir, filename)
         file.save(filepath)
-        return os.path.join(subfolder, filename)
+        return os.pathpath.join(subfolder, filename)
     return None
 
 def handle_file_upload(file, subfolder, model_class, **kwargs):
@@ -311,6 +319,11 @@ def get_bot_response(message):
         return "I apologize, but I'm not able to process requests right now. Please contact support."
 
     try:
+        # Check for greetings first
+        greetings = ['hello', 'hi', 'hey', 'hola', 'namaste']
+        if any(greeting in message for greeting in greetings):
+            return "Hi! I'm your DoJ Assistant. How can I help you today?"
+
         # Enhanced pattern matching for legal queries
         if any(keyword in message for keyword in ['case', 'court', 'hearing', 'judge', 'lawyer', 'advocate', 'legal', 'law', 'rights', 'constitution', 'justice', 'petition', 'appeal', 'evidence', 'witness', 'prosecution', 'defendant']):
             # Legal domain specific responses
@@ -798,40 +811,20 @@ def clear_chat():
 @app.route('/chat', methods=['POST'])
 @login_required
 def chat():
-    try:
-        data = request.get_json()
-        user_message = data.get('message', '')
-        
-        if not user_message:
-            return jsonify({'response': 'Please send a message!'})
-        
-        # Get bot response
-        bot_response = get_bot_response(user_message)
-        
-        # Initialize chat history in session if not exists
-        if 'chat_history' not in session:
-            session['chat_history'] = []
-        
-        # Add new message to session chat history
-        session['chat_history'].append({
-            'message': user_message,
-            'response': bot_response,
-            'timestamp': datetime.utcnow().isoformat()
-        })
-        
-        # Save to database for persistence
-        chat_message = ChatMessage(
-            user_id=current_user.id,
-            message=user_message,
-            response=bot_response
-        )
-        db.session.add(chat_message)
-        db.session.commit()
-        
-        return jsonify({'response': bot_response})
-    except Exception as e:
-        logger.error(f'Error in chat route: {str(e)}')
-        return jsonify({'response': 'Sorry, there was an error processing your request.'}), 500
+    user_message = request.json.get('message')
+    
+    # Call the Gemini API using the new function
+    gemini_response = call_gemini_api(user_message)
+
+    if 'error' in gemini_response:
+        return jsonify(gemini_response), gemini_response.get("status_code", 500)
+    
+    # Extract the response text from the Gemini API response
+    if 'candidates' in gemini_response and len(gemini_response['candidates']) > 0:
+        response_text = gemini_response['candidates'][0]['content']['parts'][0]['text']
+        return jsonify({"response": response_text})
+    
+    return jsonify({"error": "No valid response from Gemini API."}), 500
 
 @app.route('/backup-manager')
 @login_required
@@ -1123,6 +1116,62 @@ def upload_document(case_id):
         logger.error(f'Error uploading document: {str(e)}')
         flash('Error uploading document. Please try again.')
         return redirect(url_for('case_documents', case_id=case_id))
+
+@app.route('/modern-chat')
+@login_required
+def modern_chat():
+    if not current_user.is_authenticated:
+        return redirect(url_for('login'))
+    
+    # Initialize chat history in session if not exists
+    if 'chat_history' not in session:
+        session['chat_history'] = []
+    
+    # Get current date and previous dates for chat history
+    today = datetime.utcnow().date()
+    yesterday = today - timedelta(days=1)
+    week_ago = today - timedelta(days=7)
+    
+    return render_template('chat_new.html', 
+                         username=current_user.username,
+                         chat_history=session['chat_history'],
+                         today=today,
+                         yesterday=yesterday,
+                         week_ago=week_ago)
+
+@app.route('/test-gemini', methods=['GET'])
+def test_gemini():
+    test_message = "Test message to check API connection."
+    response = call_gemini_api(test_message)
+    return jsonify(response)
+
+def call_gemini_api(user_message):
+    api_key = os.getenv('GEMINI_API_KEY')
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+    headers = {
+        'Content-Type': 'application/json',
+    }
+    data = {
+        "contents": [{
+            "parts": [{"text": user_message}]
+        }]
+    }
+    
+    try:
+        logger.info(f"Calling Gemini API with message: {user_message}")
+        response = requests.post(url, headers=headers, params={'key': api_key}, json=data)
+        
+        logger.info(f"Gemini API response status: {response.status_code}")
+        logger.info(f"Gemini API response content: {response.text}")
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            logger.error(f"Gemini API error: {response.status_code} - {response.text}")
+            return {"error": "Unable to process request", "status_code": response.status_code, "message": response.text}
+    except Exception as e:
+        logger.error(f"Error calling Gemini API: {str(e)}")
+        return {"error": "An error occurred while processing your request."}
 
 if __name__ == '__main__':
     # Create database tables
